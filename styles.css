@@ -257,6 +257,12 @@ body {
   border: 1px solid rgba(14,165,255,0.16);
 }
 
+.email-status {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .table-header {
   display: flex;
   justify-content: space-between;

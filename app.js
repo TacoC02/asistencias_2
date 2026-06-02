@@ -82,6 +82,7 @@ const studentNameInput = document.getElementById('studentName');
 const studentEmailInput = document.getElementById('studentEmail');
 const studentPhoneInput = document.getElementById('studentPhone');
 const studentListContainer = document.getElementById('studentListContainer');
+const lastEmailStatusEl = document.getElementById('lastEmailStatus');
 const toastEl = document.getElementById('toast');
 const exportWordBtn = document.getElementById('exportWord');
 const subjectInfoEl = document.getElementById('subjectInfo');
@@ -231,73 +232,8 @@ const updateSubjectOptions = (year) => {
   renderLanding();
 };
 
-const sendEmail = async (student, status) => {
-  const email = (student.email || '').trim();
-  if (!email) {
-    console.log('No hay email configurado para este estudiante');
-    return;
-  }
-
-  const statusText = status === 'asistente' ? 'asistente' : 'inasistente';
-  const statusTextUpper = status === 'asistente' ? 'PRESENTE' : 'AUSENTE';
-  const subject = `✅ [Aula Virtual] Reporte de Asistencia: ${student.name}`;
-  
-  const message = `Estimado/a representante,
-
-Le informamos que el/la estudiante **${student.name}** ha sido reportado/a como **${statusTextUpper}** en la clase de hoy.
-
-**Detalles de la clase:**
-- Materia: ${getSubjectLabel(selectedYear, selectedSubject)}
-- Año: ${selectedYear}
-- Fecha: ${selectedDate}
-
-Este es un mensaje automático del sistema de registro escolar. Por favor, no responda a este correo.
-
----
-Saludos cordiales,
-Sistema de Gestión Escolar
-${new Date().toLocaleString()}`;
-
-  try {
-    console.log(`Intentando enviar correo a: ${email}`);
-    
-    const response = await fetch(API_SEND_EMAIL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        to: email, 
-        subject, 
-        message,
-        fromName: 'Sistema de Gestión Escolar'
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `Error HTTP: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('Correo enviado:', result);
-    showToast(`✅ Correo enviado a ${student.email}`);
-  } catch (error) {
-    console.error('Error detallado enviando correo:', error);
-    
-    let errorMessage = 'No se pudo enviar el correo.';
-    if (error.message === 'Failed to fetch') {
-      errorMessage = '❌ No se pudo conectar al servidor. Asegúrate de ejecutar "npm start" en la terminal.';
-    } else {
-      errorMessage = `❌ Error: ${error.message}`;
-    }
-    
-    showToast(errorMessage);
-    console.log('URL del servidor:', API_SEND_EMAIL);
-    console.log('Servidor debería estar en:', API_BASE_URL);
-  }
-};
-
 const getInitialData = () => {
-  const data = { years: {}, selectedDate };
+  const data = { years: {}, selectedDate, lastDailyEmailSentDate: '' };
   for (let year = 1; year <= 5; year += 1) {
     data.years[year] = {
       students: [
@@ -307,6 +243,8 @@ const getInitialData = () => {
           email: 'arianny@example.com',
           phone: DEFAULT_PHONE,
           status: '',
+          attendance: {},
+          year,
         },
       ],
     };
@@ -322,6 +260,14 @@ const loadData = () => {
       if (parsed && parsed.years) {
         attendanceData = parsed;
         selectedDate = parsed.selectedDate || selectedDate;
+        attendanceData.lastDailyEmailSentDate = parsed.lastDailyEmailSentDate || '';
+        Object.keys(attendanceData.years).forEach((year) => {
+          attendanceData.years[year].students = (attendanceData.years[year].students || []).map((student) => ({
+            ...student,
+            attendance: student.attendance || {},
+            year: student.year || Number(year),
+          }));
+        });
         return;
       }
     } catch (error) {
@@ -381,6 +327,8 @@ const renderStudentList = () => {
             email: row.email || '',
             phone: row.phone || '',
             status: row.status || '',
+            attendance: row.attendance || {},
+            year: Number(selectedYear),
           }));
           students = attendanceData.years[selectedYear].students;
         }
@@ -411,8 +359,9 @@ const renderStudentList = () => {
         <tbody>
           ${students
             .map((student) => {
-              const asistClass = student.status === 'asistente' ? 'active' : '';
-              const inasistClass = student.status === 'inasistente' ? 'active' : '';
+              const currentStatus = getAttendanceStatus(student, selectedSubject);
+              const asistClass = currentStatus === 'asistente' ? 'active' : '';
+              const inasistClass = currentStatus === 'inasistente' ? 'active' : '';
               return `
                 <tr data-id="${student.id}">
                   <td>${student.name}</td>
@@ -476,26 +425,146 @@ const openWhatsAppNotification = (student) => {
   showToast(`Notificación enviada por WhatsApp a ${student.phone}`);
 };
 
+const getAttendanceStatus = (student, subjectId) => {
+  return (student.attendance && student.attendance[subjectId]) || '';
+};
+
+const buildAttendanceEmailMessage = (student, year) => {
+  const subjects = getSubjectsByYear(year);
+  const rows = subjects.map((subject) => {
+    const status = getAttendanceStatus(student, subject.id);
+    const label = subject.label;
+    if (!status) {
+      return `- ${label}: pendiente`;
+    }
+    return `- ${label}: ${status === 'asistente' ? 'Asistió' : 'No asistió'}`;
+  });
+  const attendedSubjects = subjects.filter((subject) => getAttendanceStatus(student, subject.id) === 'asistente').map((s) => s.label);
+  const absentSubjects = subjects.filter((subject) => getAttendanceStatus(student, subject.id) === 'inasistente').map((s) => s.label);
+  return `Estimado/a representante,
+
+Aquí está el resumen diario de asistencia del/la estudiante ${student.name} para el curso Año ${year}.
+
+Resumen por materia:
+${rows.join('\n')}
+
+Asistió en: ${attendedSubjects.length ? attendedSubjects.join(', ') : 'ninguna'}
+No asistió en: ${absentSubjects.length ? absentSubjects.join(', ') : 'ninguna'}
+
+Este correo se envía automáticamente a las 12:00 PM con la asistencia registrada hasta ese momento.
+
+Saludos cordiales,
+Sistema de Gestión Escolar`;
+};
+
+const sendEmail = async (student, year) => {
+  const email = (student.email || '').trim();
+  if (!email) {
+    console.log('No hay email configurado para este estudiante');
+    return;
+  }
+
+  const subject = `✅ [Aula Virtual] Resumen diario de asistencia de ${student.name}`;
+  const message = buildAttendanceEmailMessage(student, year);
+
+  try {
+    console.log(`Intentando enviar correo a: ${email}`);
+
+    const response = await fetch(API_SEND_EMAIL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        to: email, 
+        subject, 
+        message,
+        fromName: 'Sistema de Gestión Escolar'
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Error HTTP: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Correo enviado:', result);
+    showToast(`✅ Correo diario enviado a ${student.email}`);
+  } catch (error) {
+    console.error('Error detallado enviando correo:', error);
+    console.log('URL del servidor:', API_SEND_EMAIL);
+    console.log('Servidor debería estar en:', API_BASE_URL);
+  }
+};
+
+const shouldSendDailySummaryEmails = () => {
+  const today = new Date().toISOString().slice(0, 10);
+  return attendanceData.lastDailyEmailSentDate !== today;
+};
+
+const markDailyEmailsSent = () => {
+  attendanceData.lastDailyEmailSentDate = new Date().toISOString().slice(0, 10);
+  saveData();
+  updateLastEmailStatus();
+};
+
+const updateLastEmailStatus = () => {
+  if (!lastEmailStatusEl) return;
+  if (!attendanceData.lastDailyEmailSentDate) {
+    lastEmailStatusEl.textContent = 'Último resumen diario: no enviado aún.';
+    return;
+  }
+  lastEmailStatusEl.textContent = `Último resumen diario enviado: ${attendanceData.lastDailyEmailSentDate}`;
+};
+
+const getNextNoonDelay = () => {
+  const now = new Date();
+  const nextNoon = new Date(now);
+  nextNoon.setHours(12, 0, 0, 0);
+  if (now >= nextNoon) {
+    nextNoon.setDate(nextNoon.getDate() + 1);
+  }
+  return nextNoon - now;
+};
+
+const sendDailySummaryEmails = async () => {
+  if (!shouldSendDailySummaryEmails()) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const years = Object.keys(attendanceData.years || {});
+  let sentAny = false;
+
+  for (const year of years) {
+    const students = attendanceData.years[year].students || [];
+    for (const student of students) {
+      const attendanceKeys = Object.keys(student.attendance || {});
+      if (!student.email || !attendanceKeys.length) continue;
+      await sendEmail(student, year);
+      sentAny = true;
+    }
+  }
+
+  if (sentAny) {
+    markDailyEmailsSent();
+  }
+};
+
+const scheduleDailyEmailSummary = () => {
+  const delay = getNextNoonDelay();
+  setTimeout(async () => {
+    await sendDailySummaryEmails();
+    scheduleDailyEmailSummary();
+  }, delay);
+};
+
 const setStudentStatus = (id, status) => {
   const students = getCurrentStudents();
   const student = students.find((item) => item.id === id);
   if (!student) return;
+  student.attendance = student.attendance || {};
+  student.attendance[selectedSubject] = status;
   student.status = status;
   saveData();
   renderStudentList();
-  // update on server if possible
-  (async () => {
-    try {
-      await fetch(API_STUDENTS, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: student.id, status }),
-      });
-    } catch (e) {
-      console.warn('No se pudo actualizar estado en servidor', e);
-    }
-  })();
-  sendEmail(student, status);
 };
 
 const deleteStudent = (id) => {
@@ -579,7 +648,7 @@ const handleStudentFormSubmit = (event) => {
         const created = await r.json();
         attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || {};
         attendanceData.years[selectedYear].students = attendanceData.years[selectedYear].students || [];
-        attendanceData.years[selectedYear].students.push({ id: created.id, name: created.name, email: created.email || '', phone: created.phone || '', status: created.status || '' });
+        attendanceData.years[selectedYear].students.push({ id: created.id, name: created.name, email: created.email || '', phone: created.phone || '', status: created.status || '', attendance: {}, year: Number(selectedYear) });
         saveData();
         studentForm.reset();
         renderStudentList();
@@ -600,6 +669,8 @@ const handleStudentFormSubmit = (event) => {
       email,
       phone,
       status: '',
+      attendance: {},
+      year: Number(selectedYear),
     };
     attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || { students: [] };
     attendanceData.years[selectedYear].students.push(newStudent);
@@ -695,6 +766,9 @@ const init = () => {
   renderLanding();
   showView('landing');
   renderSelectionInfo();
+  updateLastEmailStatus();
+  sendDailySummaryEmails();
+  scheduleDailyEmailSummary();
 
   if (window.location.protocol === 'file:') {
     showToast('Abre la página desde http://localhost:3000 para usar el correo automático.');
