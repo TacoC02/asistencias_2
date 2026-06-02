@@ -5,6 +5,7 @@ const DEFAULT_MESSAGE = 'La estudiante Arianny Suarez está asistente';
 const API_BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
 const API_SEND_WHATSAPP = `${API_BASE_URL}/api/send-whatsapp`;
 const API_SEND_EMAIL = `${API_BASE_URL}/api/send-email`;
+const API_STUDENTS = `${API_BASE_URL}/api/students`;
 
 const SUBJECTS_BY_YEAR = {
   1: [
@@ -366,14 +367,37 @@ const getCurrentStudents = () => {
 };
 
 const renderStudentList = () => {
-  const students = getCurrentStudents();
-  if (!students.length) {
-    studentListContainer.innerHTML = '<p>No hay estudiantes aún en este curso y materia.</p>';
-    renderSelectionInfo();
-    return;
-  }
+  // Try to fetch persisted students from server; fallback to localStorage.
+  let students = getCurrentStudents();
+  (async () => {
+    try {
+      const r = await fetch(`${API_STUDENTS}?year=${encodeURIComponent(selectedYear)}&subject=${encodeURIComponent(selectedSubject)}`);
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          // map supabase rows to local student shape
+          attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || {};
+          attendanceData.years[selectedYear][selectedSubject] = data.map((row) => ({
+            id: row.id,
+            name: row.name,
+            email: row.email || '',
+            phone: row.phone || '',
+            status: row.status || '',
+          }));
+          students = attendanceData.years[selectedYear][selectedSubject];
+        }
+      }
+    } catch (e) {
+      // ignore and use local storage fallback
+      console.warn('No se pudo cargar estudiantes desde la API, usando localStorage', e);
+    }
 
-  const table = document.createElement('div');
+    if (!students || !students.length) {
+      studentListContainer.innerHTML = '<p>No hay estudiantes aún en este curso y materia.</p>';
+      renderSelectionInfo();
+      return;
+    }
+    const table = document.createElement('div');
   table.className = 'table-wrapper';
   table.innerHTML = `
     <table>
@@ -411,9 +435,10 @@ const renderStudentList = () => {
     </table>
   `;
 
-  studentListContainer.innerHTML = '';
-  studentListContainer.appendChild(table);
-  renderSelectionInfo();
+    studentListContainer.innerHTML = '';
+    studentListContainer.appendChild(table);
+    renderSelectionInfo();
+  })();
 };
 
 const updateYearSelection = () => {
@@ -459,14 +484,33 @@ const setStudentStatus = (id, status) => {
   student.status = status;
   saveData();
   renderStudentList();
+  // update on server if possible
+  (async () => {
+    try {
+      await fetch(API_STUDENTS, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: student.id, status }),
+      });
+    } catch (e) {
+      console.warn('No se pudo actualizar estado en servidor', e);
+    }
+  })();
   sendEmail(student, status);
 };
 
 const deleteStudent = (id) => {
-  attendanceData.years[selectedYear][selectedSubject] = getCurrentStudents().filter((student) => student.id !== id);
-  saveData();
-  renderStudentList();
-  showToast('Estudiante eliminado correctamente');
+  (async () => {
+    try {
+      await fetch(`${API_STUDENTS}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (e) {
+      console.warn('No se pudo eliminar en servidor, se eliminará localmente', e);
+    }
+    attendanceData.years[selectedYear][selectedSubject] = getCurrentStudents().filter((student) => student.id !== id);
+    saveData();
+    renderStudentList();
+    showToast('Estudiante eliminado correctamente');
+  })();
 };
 
 const startEditStudent = (id) => {
@@ -483,8 +527,8 @@ const saveEditedStudent = () => {
   const name = normalizeName(studentNameInput.value);
   const email = studentEmailInput.value.trim();
   const phone = studentPhoneInput.value.trim();
-  if (!name || !email || !phone) {
-    showToast('Completa nombre, correo y teléfono para guardar');
+  if (!name || !email) {
+    showToast('Completa nombre y correo para guardar');
     return;
   }
   student.name = name;
@@ -496,6 +540,18 @@ const saveEditedStudent = () => {
   renderStudentList();
   studentForm.reset();
   showToast('Datos actualizados correctamente');
+  // try to update on server
+  (async () => {
+    try {
+      await fetch(API_STUDENTS, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: student.id, name: student.name, email: student.email, phone: student.phone }),
+      });
+    } catch (e) {
+      console.warn('No se pudo actualizar estudiante en servidor', e);
+    }
+  })();
 };
 
 const handleStudentFormSubmit = (event) => {
@@ -504,8 +560,8 @@ const handleStudentFormSubmit = (event) => {
   const email = studentEmailInput.value.trim();
   const phone = studentPhoneInput.value.trim();
 
-  if (!name || !email || !phone) {
-    showToast('Debes ingresar nombre, correo y teléfono');
+  if (!name || !email) {
+    showToast('Debes ingresar nombre y correo');
     return;
   }
 
@@ -513,23 +569,48 @@ const handleStudentFormSubmit = (event) => {
     saveEditedStudent();
     return;
   }
+  (async () => {
+    try {
+      const r = await fetch(API_STUDENTS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone, year: Number(selectedYear), subject: selectedSubject }),
+      });
+      if (r.ok) {
+        const created = await r.json();
+        attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || {};
+        attendanceData.years[selectedYear][selectedSubject] = attendanceData.years[selectedYear][selectedSubject] || [];
+        attendanceData.years[selectedYear][selectedSubject].push({ id: created.id, name: created.name, email: created.email || '', phone: created.phone || '', status: created.status || '' });
+        saveData();
+        studentForm.reset();
+        renderStudentList();
+        showToast('Estudiante agregado correctamente');
+        if (addStudentView && !addStudentView.classList.contains('hidden')) {
+          showView('main');
+        }
+        return;
+      }
+    } catch (e) {
+      console.warn('No se pudo crear estudiante en servidor, se creará localmente', e);
+    }
 
-  const newStudent = {
-    id: `student-${Date.now()}`,
-    name,
-    email,
-    phone,
-    status: '',
-  };
-
-  attendanceData.years[selectedYear][selectedSubject].push(newStudent);
-  saveData();
-  studentForm.reset();
-  renderStudentList();
-  showToast('Estudiante agregado correctamente');
-  if (addStudentView && !addStudentView.classList.contains('hidden')) {
-    showView('main');
-  }
+    // fallback local
+    const newStudent = {
+      id: `student-${Date.now()}`,
+      name,
+      email,
+      phone,
+      status: '',
+    };
+    attendanceData.years[selectedYear][selectedSubject].push(newStudent);
+    saveData();
+    studentForm.reset();
+    renderStudentList();
+    showToast('Estudiante agregado correctamente (local)');
+    if (addStudentView && !addStudentView.classList.contains('hidden')) {
+      showView('main');
+    }
+  })();
 };
 
 const exportCurrentToCSV = () => {

@@ -1,0 +1,94 @@
+// Proxy endpoints to store students in Supabase (free tier).
+// Requirements: set these environment variables in Vercel (Project Settings → Environment Variables):
+// SUPABASE_URL, SUPABASE_KEY
+// Create a table `students` in Supabase with columns:
+// id (uuid, primary key, default: gen_random_uuid()), name (text), email (text), phone (text), year (int), subject (text), status (text), created_at (timestamp with time zone, default now())
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+const requireSupabase = (res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    res.status(500).json({ error: 'No se ha configurado Supabase en el servidor.' });
+    return false;
+  }
+  return true;
+};
+
+const supabaseFetch = async (path, opts = {}) => {
+  const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1${path}`;
+  const headers = Object.assign({
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  }, opts.headers || {});
+
+  return fetch(url, Object.assign({}, opts, { headers }));
+};
+
+module.exports = async (req, res) => {
+  if (!requireSupabase(res)) return;
+
+  try {
+    if (req.method === 'GET') {
+      const { year, subject } = req.query || {};
+      let query = '';
+      if (year) query += `?year=eq.${encodeURIComponent(year)}`;
+      if (subject) query += `${query ? '&' : '?'}subject=eq.${encodeURIComponent(subject)}`;
+      const r = await supabaseFetch(`/students${query}`);
+      const data = await r.json();
+      return res.json(data);
+    }
+
+    if (req.method === 'POST') {
+      const body = req.body || await new Promise((resolve, reject) => {
+        let b = '';
+        req.on('data', (c) => b += c);
+        req.on('end', () => resolve(JSON.parse(b || '{}')));
+        req.on('error', reject);
+      });
+      const { name, email, phone, year, subject } = body;
+      if (!name || !year || !subject) return res.status(400).json({ error: 'Falta nombre, año o materia.' });
+      const r = await supabaseFetch('/students', {
+        method: 'POST',
+        body: JSON.stringify([{ name, email: email || null, phone: phone || null, year: Number(year), subject, status: '' }]),
+        headers: { Prefer: 'return=representation' },
+      });
+      const data = await r.json();
+      return res.status(201).json(data[0]);
+    }
+
+    if (req.method === 'PATCH' || req.method === 'PUT') {
+      const body = req.body || await new Promise((resolve, reject) => {
+        let b = '';
+        req.on('data', (c) => b += c);
+        req.on('end', () => resolve(JSON.parse(b || '{}')));
+        req.on('error', reject);
+      });
+      const { id, ...changes } = body;
+      if (!id) return res.status(400).json({ error: 'Falta id para actualizar.' });
+      const r = await supabaseFetch(`/students?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(changes),
+        headers: { Prefer: 'return=representation' },
+      });
+      const data = await r.json();
+      return res.json(data[0]);
+    }
+
+    if (req.method === 'DELETE') {
+      const { id } = req.query || {};
+      if (!id) return res.status(400).json({ error: 'Falta id para eliminar.' });
+      const r = await supabaseFetch(`/students?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (r.status === 204) return res.json({ success: true });
+      const data = await r.json();
+      return res.json(data);
+    }
+
+    res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('students API error:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+};
