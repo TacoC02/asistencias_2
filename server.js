@@ -4,6 +4,7 @@ const axios = require('axios');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -14,6 +15,126 @@ const ACCESS_TOKEN = process.env.WABA_TOKEN;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_PASS = process.env.GMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || GMAIL_USER;
+const ATTENDANCE_FILE = path.join(__dirname, 'attendance-data.json');
+
+const loadAttendanceData = () => {
+  try {
+    if (!fs.existsSync(ATTENDANCE_FILE)) {
+      fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify({ students: {}, lastDailyEmailSentDate: '' }, null, 2));
+    }
+    const raw = fs.readFileSync(ATTENDANCE_FILE, 'utf8');
+    const parsed = JSON.parse(raw || '{}');
+    return {
+      students: parsed.students || {},
+      lastDailyEmailSentDate: parsed.lastDailyEmailSentDate || '',
+    };
+  } catch (error) {
+    console.error('Error leyendo attendance-data.json:', error);
+    return { students: {}, lastDailyEmailSentDate: '' };
+  }
+};
+
+const saveAttendanceData = (data) => {
+  try {
+    fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('Error guardando attendance-data.json:', error);
+  }
+};
+
+const getNextNoonDelay = () => {
+  const now = new Date();
+  const nextNoon = new Date(now);
+  nextNoon.setHours(12, 0, 0, 0);
+  if (now >= nextNoon) {
+    nextNoon.setDate(nextNoon.getDate() + 1);
+  }
+  return nextNoon - now;
+};
+
+const buildStudentAttendanceMessage = (student) => {
+  const attendanceEntries = Object.entries(student.attendance || {});
+  const rows = attendanceEntries.map(([subjectId, entry]) => {
+    const label = entry.label || subjectId;
+    const status = entry.status === 'asistente' ? 'Asistió' : 'No asistió';
+    return `- ${label}: ${status}`;
+  });
+
+  return `Estimado/a representante,
+
+Aquí está el resumen diario de asistencia del/la estudiante ${student.name} para el curso Año ${student.year}.
+
+Materias:
+${rows.join('\n')}
+
+Este correo se envía automáticamente a las 12:00 PM con la asistencia registrada hasta ese momento.
+
+Saludos cordiales,
+Sistema de Gestión Escolar`;
+};
+
+const sendEmailToStudent = async (student) => {
+  if (!GMAIL_USER || !GMAIL_PASS) {
+    console.warn('No se ha configurado Gmail en el servidor. No se envía correo.');
+    return;
+  }
+  if (!student.email) return;
+  if (!student.attendance || !Object.keys(student.attendance).length) return;
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: GMAIL_USER,
+      pass: GMAIL_PASS,
+    },
+  });
+
+  const mailOptions = {
+    from: `"Sistema Escolar" <${EMAIL_FROM}>`,
+    to: student.email,
+    subject: `✅ Resumen diario de asistencia: ${student.name}`,
+    text: buildStudentAttendanceMessage(student),
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Correo diario enviado a ${student.email}: ${info.messageId}`);
+  } catch (error) {
+    console.error(`Error enviando correo diario a ${student.email}:`, error);
+  }
+};
+
+const sendDailyAttendanceEmails = async () => {
+  const data = loadAttendanceData();
+  const today = new Date().toISOString().slice(0, 10);
+  if (data.lastDailyEmailSentDate === today) {
+    console.log('El resumen diario ya se envió hoy.');
+    return;
+  }
+
+  const students = Object.values(data.students).filter((student) => student.email && student.attendance && Object.keys(student.attendance).length);
+  if (!students.length) {
+    console.log('No hay estudiantes con asistencia registrada para enviar.');
+    return;
+  }
+
+  for (const student of students) {
+    await sendEmailToStudent(student);
+  }
+
+  data.lastDailyEmailSentDate = today;
+  saveAttendanceData(data);
+  console.log('Resumen diario enviado y fecha registrada:', today);
+};
+
+const scheduleDailyAttendanceEmails = () => {
+  const delay = getNextNoonDelay();
+  console.log(`Próximo envío diario programado en ${Math.round(delay / 1000 / 60)} minutos.`);
+  setTimeout(async () => {
+    await sendDailyAttendanceEmails();
+    scheduleDailyAttendanceEmails();
+  }, delay);
+};
 
 // Si no usamos la integración WABA, no mostrar advertencia para evitar ruido.
 // La verificación se realiza al intentar usar el endpoint /api/send-whatsapp.
@@ -24,6 +145,43 @@ if (!GMAIL_USER || !GMAIL_PASS) {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
+
+app.post('/api/attendance', (req, res) => {
+  const { id, name, email, phone, year, subject, subjectLabel, status } = req.body || {};
+  if (!id || !name || !email || !year || !subject || !status) {
+    return res.status(400).json({ error: 'Falta id, nombre, correo, año, materia o estado.' });
+  }
+
+  const data = loadAttendanceData();
+  const student = data.students[id] || { id, name, email, phone: phone || '', year: Number(year), attendance: {} };
+  student.name = name;
+  student.email = email;
+  student.phone = phone || student.phone;
+  student.year = Number(year);
+  student.attendance = student.attendance || {};
+  student.attendance[subject] = { status, label: subjectLabel || subject };
+  data.students[id] = student;
+  saveAttendanceData(data);
+
+  res.json(student);
+});
+
+app.get('/api/attendance', (req, res) => {
+  const data = loadAttendanceData();
+  const year = req.query.year;
+  const students = Object.values(data.students).filter((student) => !year || String(student.year) === String(year));
+  res.json({ students, lastDailyEmailSentDate: data.lastDailyEmailSentDate });
+});
+
+app.post('/api/send-daily-emails', async (req, res) => {
+  try {
+    await sendDailyAttendanceEmails();
+    res.json({ success: true, message: 'Envio diario ejecutado.' });
+  } catch (error) {
+    console.error('Error forzando envío diario:', error);
+    res.status(500).json({ error: 'No se pudo ejecutar el envío diario.' });
+  }
+});
 
 app.post('/api/send-whatsapp', async (req, res) => {
   const { to, message } = req.body;
@@ -105,3 +263,5 @@ server.on('error', (error) => {
   }
   console.error('Error en el servidor:', error);
 });
+
+scheduleDailyAttendanceEmails();

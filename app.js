@@ -6,6 +6,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:30
 const API_SEND_WHATSAPP = `${API_BASE_URL}/api/send-whatsapp`;
 const API_SEND_EMAIL = `${API_BASE_URL}/api/send-email`;
 const API_STUDENTS = `${API_BASE_URL}/api/students`;
+const API_ATTENDANCE = `${API_BASE_URL}/api/attendance`;
 
 const SUBJECTS_BY_YEAR = {
   1: [
@@ -451,7 +452,7 @@ ${rows.join('\n')}
 Asistió en: ${attendedSubjects.length ? attendedSubjects.join(', ') : 'ninguna'}
 No asistió en: ${absentSubjects.length ? absentSubjects.join(', ') : 'ninguna'}
 
-Este correo se envía automáticamente a las 12:00 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 12:30 AM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -519,7 +520,7 @@ const updateLastEmailStatus = () => {
 const getNextNoonDelay = () => {
   const now = new Date();
   const nextNoon = new Date(now);
-  nextNoon.setHours(12, 0, 0, 0);
+  nextNoon.setHours(0, 12, 0, 0);
   if (now >= nextNoon) {
     nextNoon.setDate(nextNoon.getDate() + 1);
   }
@@ -565,6 +566,26 @@ const setStudentStatus = (id, status) => {
   student.status = status;
   saveData();
   renderStudentList();
+  (async () => {
+    try {
+      await fetch(API_ATTENDANCE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          phone: student.phone,
+          year: Number(selectedYear),
+          subject: selectedSubject,
+          subjectLabel: getSubjectLabel(selectedYear, selectedSubject),
+          status,
+        }),
+      });
+    } catch (e) {
+      console.warn('No se pudo guardar la asistencia en el servidor', e);
+    }
+  })();
 };
 
 const deleteStudent = (id) => {
@@ -767,8 +788,6 @@ const init = () => {
   showView('landing');
   renderSelectionInfo();
   updateLastEmailStatus();
-  sendDailySummaryEmails();
-  scheduleDailyEmailSummary();
 
   if (window.location.protocol === 'file:') {
     showToast('Abre la página desde http://localhost:3000 para usar el correo automático.');
