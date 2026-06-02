@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asistencia Escolar</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <section id="landingView" class="landing-shell">
+    <div class="landing-card">
+      <div class="landing-intro">
+        <span class="eyebrow">Bienvenido</span>
+        <h1>Elige tu materia</h1>
+        <p>Desplázate entre las materias disponibles y selecciona para pasar a la lista de estudiantes.</p>
+      </div>
+      <div class="landing-actions">
+        <div id="yearTabs" class="year-tabs"></div>
+        <div id="subjectCards" class="subject-cards"></div>
+        <button id="landingAddStudent" class="primary">Agregar estudiante</button>
+      </div>
+    </div>
+  </section>
+
+  <main id="mainView" class="app-shell hidden">
+    <header>
+      <div class="header-top">
+        <div>
+          <h1>Registro de asistencia escolar</h1>
+          <p>Selecciona curso y materia, agrega alumnos, marca asistencia y envía confirmaciones por WhatsApp.</p>
+        </div>
+        <button id="backToLanding" class="secondary back-button">← Volver a materias</button>
+      </div>
+      <div class="info-row">
+        <strong id="currentSelection">Año 1 · Materia: Matemáticas · Estudiantes: 1</strong>
+      </div>
+    </header>
+
+    <section class="controls">
+      <div class="selector-group">
+        <label for="yearSelect">Año escolar</label>
+        <select id="yearSelect"></select>
+      </div>
+      <div class="selector-group">
+        <label for="subjectSelect">Materia seleccionada</label>
+        <select id="subjectSelect" disabled></select>
+        <p id="subjectInfo" class="selector-note">Materia seleccionada: Matemáticas</p>
+      </div>
+      <div class="selector-group">
+        <label for="dateInput">Fecha</label>
+        <input id="dateInput" type="date" />
+      </div>
+    </section>
+
+    <div class="main-actions">
+      <button id="mainAddStudent" class="primary">Agregar estudiante</button>
+    </div>
+
+    <section id="addStudentView" class="add-student-card hidden">
+      <div class="form-header">
+        <button id="closeAddStudent" class="secondary">← Volver</button>
+        <h2>Agregar estudiante</h2>
+      </div>
+      <p id="addStudentSubjectInfo" class="selector-note">Curso: Año 1 · Materia: Matemáticas</p>
+      <form id="studentForm">
+        <div class="form-row">
+          <label for="studentName">Nombre del estudiante</label>
+          <input id="studentName" type="text" placeholder="Ej. Juan Pérez" required />
+        </div>
+        <div class="form-row">
+          <label for="studentEmail">Correo del estudiante</label>
+          <input id="studentEmail" type="email" placeholder="ejemplo@gmail.com" required />
+        </div>
+        <div class="form-row">
+          <label for="studentPhone">Teléfono representante</label>
+          <input id="studentPhone" type="tel" placeholder="0412xxxxxxx" required pattern="[0-9]{10,11}" />
+        </div>
+        <div class="form-actions">
+          <button type="submit">Agregar alumno</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="table-section">
+      <div class="table-header">
+        <div>
+          <h2>Lista de estudiantes</h2>
+          <p class="table-help">Revisa la asistencia por materia y envía la confirmación automática cuando marques asistente o inasistente.</p>
+        </div>
+        <div id="studentSummary" class="student-summary"></div>
+      </div>
+      <div id="studentListContainer"></div>
+      <div class="export-controls">
+        <button id="exportWord" class="secondary">Guardar (Word)</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
