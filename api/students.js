@@ -2,7 +2,7 @@
 // Requirements: set these environment variables in Vercel (Project Settings → Environment Variables):
 // SUPABASE_URL, SUPABASE_KEY
 // Create a table `students` in Supabase with columns:
-// id (uuid, primary key, default: gen_random_uuid()), name (text), email (text), phone (text), year (int), subject (text), status (text), created_at (timestamp with time zone, default now())
+// id (uuid, primary key, default: gen_random_uuid()), name (text), email (text), phone (text), year (int), status (text), created_at (timestamp with time zone, default now())
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -32,10 +32,12 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'GET') {
-      const { year, subject } = req.query || {};
-      let query = '';
-      if (year) query += `?year=eq.${encodeURIComponent(year)}`;
-      if (subject) query += `${query ? '&' : '?'}subject=eq.${encodeURIComponent(subject)}`;
+      const { year } = req.query || {};
+      if (!year) {
+        const data = await supabaseFetch('/students');
+        return res.json(await data.json());
+      }
+      const query = `?year=eq.${encodeURIComponent(year)}`;
       const r = await supabaseFetch(`/students${query}`);
       const data = await r.json();
       return res.json(data);
@@ -48,11 +50,11 @@ module.exports = async (req, res) => {
         req.on('end', () => resolve(JSON.parse(b || '{}')));
         req.on('error', reject);
       });
-      const { name, email, phone, year, subject } = body;
-      if (!name || !year || !subject) return res.status(400).json({ error: 'Falta nombre, año o materia.' });
+      const { name, email, phone, year } = body;
+      if (!name || !year) return res.status(400).json({ error: 'Falta nombre o año.' });
       const r = await supabaseFetch('/students', {
         method: 'POST',
-        body: JSON.stringify([{ name, email: email || null, phone: phone || null, year: Number(year), subject, status: '' }]),
+        body: JSON.stringify([{ name, email: email || null, phone: phone || null, year: Number(year), status: '' }]),
         headers: { Prefer: 'return=representation' },
       });
       const data = await r.json();

@@ -299,18 +299,17 @@ ${new Date().toLocaleString()}`;
 const getInitialData = () => {
   const data = { years: {}, selectedDate };
   for (let year = 1; year <= 5; year += 1) {
-    data.years[year] = {};
-    getSubjectsByYear(year).forEach((subject) => {
-      data.years[year][subject.id] = [
+    data.years[year] = {
+      students: [
         {
-          id: `arianny-${year}-${subject.id}`,
+          id: `arianny-${year}`,
           name: 'Arianny Suarez',
           email: 'arianny@example.com',
           phone: DEFAULT_PHONE,
           status: '',
         },
-      ];
-    });
+      ],
+    };
   }
   return data;
 };
@@ -363,7 +362,7 @@ const buildSelectors = () => {
 };
 
 const getCurrentStudents = () => {
-  return attendanceData.years[selectedYear][selectedSubject] || [];
+  return attendanceData.years[selectedYear]?.students || [];
 };
 
 const renderStudentList = () => {
@@ -371,20 +370,19 @@ const renderStudentList = () => {
   let students = getCurrentStudents();
   (async () => {
     try {
-      const r = await fetch(`${API_STUDENTS}?year=${encodeURIComponent(selectedYear)}&subject=${encodeURIComponent(selectedSubject)}`);
+      const r = await fetch(`${API_STUDENTS}?year=${encodeURIComponent(selectedYear)}`);
       if (r.ok) {
         const data = await r.json();
         if (Array.isArray(data)) {
-          // map supabase rows to local student shape
           attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || {};
-          attendanceData.years[selectedYear][selectedSubject] = data.map((row) => ({
+          attendanceData.years[selectedYear].students = data.map((row) => ({
             id: row.id,
             name: row.name,
             email: row.email || '',
             phone: row.phone || '',
             status: row.status || '',
           }));
-          students = attendanceData.years[selectedYear][selectedSubject];
+          students = attendanceData.years[selectedYear].students;
         }
       }
     } catch (e) {
@@ -397,43 +395,44 @@ const renderStudentList = () => {
       renderSelectionInfo();
       return;
     }
+
     const table = document.createElement('div');
-  table.className = 'table-wrapper';
-  table.innerHTML = `
-    <table>
-      <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Correo</th>
-              <th>Representante</th>
-              <th>Asistencia</th>
-            </tr>
-      </thead>
-      <tbody>
-        ${students
-          .map((student) => {
-            const asistClass = student.status === 'asistente' ? 'active' : '';
-            const inasistClass = student.status === 'inasistente' ? 'active' : '';
-            return `
-              <tr data-id="${student.id}">
-                <td>${student.name}</td>
-                <td>${student.email || '-'}</td>
-                <td>${student.phone}</td>
-                <td>
-                  <div class="state-buttons">
-                    <button class="state-button ${asistClass}" data-action="asistente" data-id="${student.id}">Asistente</button>
-                    <button class="state-button ${inasistClass}" data-action="inasistente" data-id="${student.id}">Inasistente</button>
-                    <button class="secondary" data-action="edit" data-id="${student.id}">Editar</button>
-                    <button class="secondary" data-action="delete" data-id="${student.id}">Borrar</button>
-                  </div>
-                </td>
-              </tr>
-            `;
-          })
-          .join('')}
-      </tbody>
-    </table>
-  `;
+    table.className = 'table-wrapper';
+    table.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Correo</th>
+            <th>Representante</th>
+            <th>Asistencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${students
+            .map((student) => {
+              const asistClass = student.status === 'asistente' ? 'active' : '';
+              const inasistClass = student.status === 'inasistente' ? 'active' : '';
+              return `
+                <tr data-id="${student.id}">
+                  <td>${student.name}</td>
+                  <td>${student.email || '-'}</td>
+                  <td>${student.phone}</td>
+                  <td>
+                    <div class="state-buttons">
+                      <button class="state-button ${asistClass}" data-action="asistente" data-id="${student.id}">Asistente</button>
+                      <button class="state-button ${inasistClass}" data-action="inasistente" data-id="${student.id}">Inasistente</button>
+                      <button class="secondary" data-action="edit" data-id="${student.id}">Editar</button>
+                      <button class="secondary" data-action="delete" data-id="${student.id}">Borrar</button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            })
+            .join('')}
+        </tbody>
+      </table>
+    `;
 
     studentListContainer.innerHTML = '';
     studentListContainer.appendChild(table);
@@ -506,7 +505,7 @@ const deleteStudent = (id) => {
     } catch (e) {
       console.warn('No se pudo eliminar en servidor, se eliminará localmente', e);
     }
-    attendanceData.years[selectedYear][selectedSubject] = getCurrentStudents().filter((student) => student.id !== id);
+    attendanceData.years[selectedYear].students = getCurrentStudents().filter((student) => student.id !== id);
     saveData();
     renderStudentList();
     showToast('Estudiante eliminado correctamente');
@@ -574,13 +573,13 @@ const handleStudentFormSubmit = (event) => {
       const r = await fetch(API_STUDENTS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, year: Number(selectedYear), subject: selectedSubject }),
+        body: JSON.stringify({ name, email, phone, year: Number(selectedYear) }),
       });
       if (r.ok) {
         const created = await r.json();
         attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || {};
-        attendanceData.years[selectedYear][selectedSubject] = attendanceData.years[selectedYear][selectedSubject] || [];
-        attendanceData.years[selectedYear][selectedSubject].push({ id: created.id, name: created.name, email: created.email || '', phone: created.phone || '', status: created.status || '' });
+        attendanceData.years[selectedYear].students = attendanceData.years[selectedYear].students || [];
+        attendanceData.years[selectedYear].students.push({ id: created.id, name: created.name, email: created.email || '', phone: created.phone || '', status: created.status || '' });
         saveData();
         studentForm.reset();
         renderStudentList();
@@ -602,7 +601,8 @@ const handleStudentFormSubmit = (event) => {
       phone,
       status: '',
     };
-    attendanceData.years[selectedYear][selectedSubject].push(newStudent);
+    attendanceData.years[selectedYear] = attendanceData.years[selectedYear] || { students: [] };
+    attendanceData.years[selectedYear].students.push(newStudent);
     saveData();
     studentForm.reset();
     renderStudentList();
