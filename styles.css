@@ -1,13 +1,15 @@
 :root {
-  --bg: #000000;
-  --surface: #071127; /* very dark blue */
-  --primary: #0ea5ff; /* bright blue */
-  --accent: #0b69ff;
-  --text: #e6f3ff; /* light blue-ish white */
-  --muted: #94a3b8;
-  --danger: #ff6b6b;
-  --success: #34d399;
-  --border: rgba(255,255,255,0.06);
+  --bg: #020715;
+  --surface: #06112a;
+  --surface-soft: rgba(255,255,255,0.04);
+  --primary: #4da8ff;
+  --accent: #3d7bff;
+  --button: #0ea5ff;
+  --text: #eef4ff;
+  --muted: #9bb0c7;
+  --danger: #ff7d7d;
+  --success: #55d9a2;
+  --border: rgba(255,255,255,0.08);
 }
 
 * {
@@ -17,7 +19,10 @@
 body {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;
-  background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, rgba(77,168,255,0.14), transparent 18%),
+              radial-gradient(circle at 80% 10%, rgba(14,165,255,0.12), transparent 20%),
+              linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
   color: var(--text);
 }
 
@@ -33,17 +38,41 @@ body {
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
+  position: relative;
+}
+
+.landing-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 15% 15%, rgba(77,168,255,0.15), transparent 24%),
+              radial-gradient(circle at 90% 20%, rgba(14,165,255,0.1), transparent 16%);
+  pointer-events: none;
 }
 
 .landing-card {
+  position: relative;
   width: 100%;
-  max-width: 900px;
-  padding: 32px;
-  border-radius: 32px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 24px 60px rgba(2,6,23,0.68);
+  max-width: 960px;
+  padding: 36px;
+  border-radius: 36px;
+  background: rgba(10, 22, 48, 0.95);
+  border: 1px solid rgba(77,168,255,0.16);
+  box-shadow: 0 36px 90px rgba(2,6,23,0.7);
+  overflow: hidden;
   animation: fadeInUp 0.8s ease both;
+}
+
+.landing-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -60px;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(77,168,255,0.22), transparent 55%);
+  filter: blur(12px);
+  pointer-events: none;
 }
 
 @keyframes fadeInUp {
@@ -52,35 +81,55 @@ body {
 }
 
 .landing-intro {
-  margin-bottom: 28px;
+  margin-bottom: 34px;
+  position: relative;
+  z-index: 1;
 }
 
 .eyebrow {
-  display: inline-block;
-  margin-bottom: 14px;
-  letter-spacing: 0.12em;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--primary);
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.eyebrow::before {
+  content: '';
+  width: 24px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(77,168,255,0), var(--primary), rgba(77,168,255,0));
+  display: inline-block;
 }
 
 .landing-intro h1 {
   margin: 0;
-  font-size: clamp(2rem, 3vw, 3rem);
-  line-height: 1.05;
+  font-size: clamp(2.4rem, 4vw, 4.2rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  text-shadow: 0 10px 30px rgba(0,0,0,0.18);
 }
 
 .landing-intro p {
   max-width: 680px;
-  margin-top: 18px;
+  margin-top: 20px;
   color: var(--muted);
-  line-height: 1.7;
+  line-height: 1.8;
+  font-size: 1.05rem;
 }
 
 .landing-actions {
   display: grid;
   gap: 18px;
+}
+
+.landing-actions > * {
+  position: relative;
+  z-index: 1;
 }
 
 .year-tabs {
@@ -90,13 +139,13 @@ body {
 }
 
 .year-tab {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(77,168,255,0.14);
   color: var(--text);
   padding: 12px 18px;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 
 .year-tab:hover {
@@ -116,12 +165,12 @@ body {
 }
 
 .subject-card {
-  padding: 22px;
-  border-radius: 22px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(77,168,255,0.1);
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .subject-card:hover,
@@ -152,6 +201,37 @@ body {
   gap: 18px;
 }
 
+.info-row {
+  text-align: center;
+  margin-top: 14px;
+}
+
+.info-row strong {
+  display: inline-block;
+  background: rgba(14,165,255,0.1);
+  padding: 10px 16px;
+  border-radius: 999px;
+  color: var(--text);
+  border: 1px solid rgba(14,165,255,0.16);
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.table-header h2 {
+  margin: 0;
+}
+
+.student-summary {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 @media (max-width:860px) {
   .header-top {
     flex-direction: column;
@@ -159,15 +239,94 @@ body {
   }
 }
 
-@media (max-width:700px) {
-  .controls {
-    grid-template-columns: 1fr;
+@media (max-width:900px) {
+  .landing-card {
+    padding: 28px 20px;
   }
-  table {
-    min-width: 600px;
+
+  .landing-intro h1 {
+    font-size: clamp(2.2rem, 8vw, 3.4rem);
   }
+}
+
+@media (max-width:760px) {
+  .app-shell {
+    padding: 18px;
+  }
+
+  .landing-shell {
+    padding: 24px 16px;
+  }
+
+  .landing-actions {
+    gap: 14px;
+  }
+
+  .header-top {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+  }
+
+  .info-row {
+    margin-top: 14px;
+  }
+
+  .year-tabs {
+    justify-content: center;
+  }
+
   .subject-cards {
     grid-template-columns: 1fr;
+  }
+
+  .subject-card {
+    padding: 18px;
+  }
+
+  button {
+    width: 100%;
+  }
+
+  .main-actions {
+    justify-content: stretch;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  table {
+    min-width: auto;
+    width: 100%;
+  }
+
+  thead th,
+  td {
+    padding: 12px 10px;
+  }
+}
+
+@media (max-width:520px) {
+  .landing-card::before {
+    width: 200px;
+    height: 200px;
+    top: -20px;
+    right: -30px;
+  }
+
+  .landing-intro p {
+    font-size: 1rem;
+  }
+
+  .selector-group,
+  .form-row {
+    gap: 6px;
+  }
+
+  .button.primary,
+  button.secondary {
+    width: 100%;
   }
 }
 
