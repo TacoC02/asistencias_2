@@ -42,9 +42,9 @@ const saveAttendanceData = (data) => {
   }
 };
 
-// Configurar hora de envío diaria en el servidor (por defecto 21:17)
+// Configurar hora de envío diaria en el servidor (por defecto 21:25)
 const DAILY_SEND_HOUR = Number(process.env.DAILY_SEND_HOUR || 21);
-const DAILY_SEND_MINUTE = Number(process.env.DAILY_SEND_MINUTE || 17);
+const DAILY_SEND_MINUTE = Number(process.env.DAILY_SEND_MINUTE || 25);
 const getNextNoonDelay = () => {
   const now = new Date();
   const nextSend = new Date(now);
