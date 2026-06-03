@@ -104,6 +104,10 @@ let selectedDate = new Date().toISOString().slice(0, 10);
 let attendanceData = {};
 let editingStudentId = null;
 let addStudentReturnView = 'landing';
+// Configure hora diaria de envío (local cliente)
+const DAILY_SEND_HOUR = 20; // 20 = 8 PM
+const DAILY_SEND_MINUTE = 46; // :46
+let _sendingInProgress = false;
 
 const getSubjectsByYear = (year) => SUBJECTS_BY_YEAR[Number(year)] || [];
 
@@ -295,6 +299,28 @@ const showToast = (message) => {
   }, 2800);
 };
 
+const showAttendanceModal = (message) => {
+  const modal = document.getElementById('attendanceModal');
+  const msg = document.getElementById('attendanceModalMessage');
+  const closeBtn = document.getElementById('attendanceModalClose');
+  if (!modal || !msg) return;
+  msg.textContent = message;
+  modal.classList.remove('hidden');
+  // allow close button
+  if (closeBtn) {
+    const handler = () => {
+      modal.classList.add('hidden');
+      closeBtn.removeEventListener('click', handler);
+    };
+    closeBtn.addEventListener('click', handler);
+  }
+  // auto hide after 2.5s
+  clearTimeout(showAttendanceModal.timeoutId);
+  showAttendanceModal.timeoutId = setTimeout(() => {
+    modal.classList.add('hidden');
+  }, 2500);
+};
+
 const buildSelectors = () => {
   yearSelect.innerHTML = '';
   subjectSelect.innerHTML = '';
@@ -452,7 +478,7 @@ ${rows.join('\n')}
 Asistió en: ${attendedSubjects.length ? attendedSubjects.join(', ') : 'ninguna'}
 No asistió en: ${absentSubjects.length ? absentSubjects.join(', ') : 'ninguna'}
 
-Este correo se envía automáticamente a las 3:40 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 8:46 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -520,8 +546,7 @@ const updateLastEmailStatus = () => {
 const getNextNoonDelay = () => {
   const now = new Date();
   const nextSend = new Date(now);
-  // Programar para las 15:40 (3:40 PM) hoy o mañana
-  nextSend.setHours(15, 40, 0, 0);
+  nextSend.setHours(DAILY_SEND_HOUR, DAILY_SEND_MINUTE, 0, 0);
   if (now >= nextSend) {
     nextSend.setDate(nextSend.getDate() + 1);
   }
@@ -550,6 +575,25 @@ const sendDailySummaryEmails = async () => {
   }
 };
 
+const startDailySendChecker = () => {
+  // Comprobar cada 30 segundos si llegó la hora objetivo y no se ha enviado hoy.
+  setInterval(async () => {
+    try {
+      if (_sendingInProgress) return;
+      const now = new Date();
+      if (now.getHours() === DAILY_SEND_HOUR && now.getMinutes() >= DAILY_SEND_MINUTE) {
+        if (!shouldSendDailySummaryEmails()) return;
+        _sendingInProgress = true;
+        await sendDailySummaryEmails();
+        _sendingInProgress = false;
+      }
+    } catch (e) {
+      console.error('daily-send-checker error', e);
+      _sendingInProgress = false;
+    }
+  }, 30 * 1000);
+};
+
 const scheduleDailyEmailSummary = () => {
   const delay = getNextNoonDelay();
   setTimeout(async () => {
@@ -567,6 +611,12 @@ const setStudentStatus = (id, status) => {
   student.status = status;
   saveData();
   renderStudentList();
+  // mostrar modal de confirmación
+  if (status === 'asistente') {
+    showAttendanceModal('Se marcó asistente');
+  } else if (status === 'inasistente') {
+    showAttendanceModal('Se marcó inasistente');
+  }
   (async () => {
     try {
       await fetch(API_ATTENDANCE, {
@@ -789,9 +839,9 @@ const init = () => {
   showView('landing');
   renderSelectionInfo();
   updateLastEmailStatus();
-  // enviar y programar envíos locales para pruebas (3:40 PM)
-  sendDailySummaryEmails();
+  // programar envíos locales y arrancar comprobador robusto
   scheduleDailyEmailSummary();
+  startDailySendChecker();
 
   if (window.location.protocol === 'file:') {
     showToast('Abre la página desde http://localhost:3000 para usar el correo automático.');

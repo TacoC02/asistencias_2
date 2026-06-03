@@ -50,7 +50,7 @@ Aquí está el resumen diario de asistencia del/la estudiante ${student.name} pa
 Materias:
 ${lines.join('\n')}
 
-Este correo se envía automáticamente a las 3:40 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 8:46 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -86,14 +86,17 @@ module.exports = async (req, res) => {
 
   try {
     const today = getToday();
+    // obtener asistencias del día
     const attendancesResponse = await supabaseFetch(`/attendances?date=eq.${encodeURIComponent(today)}`);
     const attendances = await attendancesResponse.json();
+    console.log('cron: attendances fetched count=', Array.isArray(attendances) ? attendances.length : 0);
 
     if (!Array.isArray(attendances) || !attendances.length) {
       return res.json({ success: true, message: 'No hay registros de asistencia para hoy.' });
     }
 
     const studentIds = [...new Set(attendances.map((item) => item.student_id))];
+    console.log('cron: studentIds raw=', studentIds);
     // Formatea los IDs para la consulta REST de Supabase.
     // Si los IDs no son numéricos, deben ir entre comillas simples: in.('id1','id2')
     const formattedIds = studentIds
@@ -105,6 +108,10 @@ module.exports = async (req, res) => {
       .join(',');
     const studentsResponse = await supabaseFetch(`/students?id=in.(${formattedIds})`);
     const students = await studentsResponse.json();
+    console.log('cron: students fetched count=', Array.isArray(students) ? students.length : 0);
+    if (!studentsResponse.ok) {
+      console.error('cron: studentsResponse not ok', studentsResponse.status);
+    }
     const studentMap = parseStudentRecords(students);
 
     const grouped = attendances.reduce((acc, item) => {
@@ -114,14 +121,38 @@ module.exports = async (req, res) => {
     }, {});
 
     const sent = [];
+    const missingStudents = [];
+    const missingEmails = [];
     for (const [studentId, entries] of Object.entries(grouped)) {
-      const student = studentMap[studentId];
-      if (!student || !student.email) continue;
-      await sendEmail(student, entries);
-      sent.push(student.email);
+      // try direct lookup; also try string/number variants
+      let student = studentMap[studentId];
+      if (!student) {
+        // try numeric key
+        student = studentMap[String(studentId)];
+      }
+      if (!student) {
+        missingStudents.push(studentId);
+        continue;
+      }
+      if (!student.email) {
+        missingEmails.push(student.id);
+        continue;
+      }
+      try {
+        await sendEmail(student, entries);
+        sent.push(student.email);
+      } catch (e) {
+        console.error('cron: error sending to', student.email, e);
+      }
     }
 
-    return res.json({ success: true, sent });
+    const result = { success: true, sent, missingStudents, missingEmails };
+    if (req.query && (req.query.debug === '1' || req.query.debug === 'true')) {
+      // include intermediate data for debugging
+      result.debug = { attendancesCount: attendances.length, studentIds, formattedIds, studentsCount: students.length };
+    }
+
+    return res.json(result);
   } catch (error) {
     console.error('cron-daily-emails error:', error);
     res.status(500).json({ error: error.message || String(error) });
