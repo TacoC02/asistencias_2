@@ -452,7 +452,7 @@ ${rows.join('\n')}
 Asistió en: ${attendedSubjects.length ? attendedSubjects.join(', ') : 'ninguna'}
 No asistió en: ${absentSubjects.length ? absentSubjects.join(', ') : 'ninguna'}
 
-Este correo se envía automáticamente a las 8:15 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 8:22 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -520,8 +520,8 @@ const updateLastEmailStatus = () => {
 const getNextNoonDelay = () => {
   const now = new Date();
   const nextSend = new Date(now);
-  // Programar para las 20:15 (8:15 PM) hoy o mañana
-  nextSend.setHours(20, 15, 0, 0);
+  // Programar para las 20:22 (8:22 PM) hoy o mañana
+  nextSend.setHours(20, 22, 0, 0);
   if (now >= nextSend) {
     nextSend.setDate(nextSend.getDate() + 1);
   }
@@ -789,7 +789,7 @@ const init = () => {
   showView('landing');
   renderSelectionInfo();
   updateLastEmailStatus();
-  // enviar y programar envíos locales para pruebas (8:15 PM)
+  // enviar y programar envíos locales para pruebas (8:22 PM)
   sendDailySummaryEmails();
   scheduleDailyEmailSummary();
 
