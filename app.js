@@ -436,9 +436,9 @@ const buildAttendanceEmailMessage = (student, year) => {
     const status = getAttendanceStatus(student, subject.id);
     const label = subject.label;
     if (!status) {
-      return `- ${label}: pendiente`;
+      return `-- ${label}: pendiente`;
     }
-    return `- ${label}: ${status === 'asistente' ? 'Asistió' : 'No asistió'}`;
+    return `-- ${label}: ${status === 'asistente' ? 'Asistió' : 'No asistió'}`;
   });
   const attendedSubjects = subjects.filter((subject) => getAttendanceStatus(student, subject.id) === 'asistente').map((s) => s.label);
   const absentSubjects = subjects.filter((subject) => getAttendanceStatus(student, subject.id) === 'inasistente').map((s) => s.label);
@@ -452,7 +452,7 @@ ${rows.join('\n')}
 Asistió en: ${attendedSubjects.length ? attendedSubjects.join(', ') : 'ninguna'}
 No asistió en: ${absentSubjects.length ? absentSubjects.join(', ') : 'ninguna'}
 
-Este correo se envía automáticamente a las 12:30 AM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 8:15 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -519,12 +519,13 @@ const updateLastEmailStatus = () => {
 
 const getNextNoonDelay = () => {
   const now = new Date();
-  const nextNoon = new Date(now);
-  nextNoon.setHours(0, 12, 0, 0);
-  if (now >= nextNoon) {
-    nextNoon.setDate(nextNoon.getDate() + 1);
+  const nextSend = new Date(now);
+  // Programar para las 20:15 (8:15 PM) hoy o mañana
+  nextSend.setHours(20, 15, 0, 0);
+  if (now >= nextSend) {
+    nextSend.setDate(nextSend.getDate() + 1);
   }
-  return nextNoon - now;
+  return nextSend - now;
 };
 
 const sendDailySummaryEmails = async () => {
@@ -788,6 +789,9 @@ const init = () => {
   showView('landing');
   renderSelectionInfo();
   updateLastEmailStatus();
+  // enviar y programar envíos locales para pruebas (8:15 PM)
+  sendDailySummaryEmails();
+  scheduleDailyEmailSummary();
 
   if (window.location.protocol === 'file:') {
     showToast('Abre la página desde http://localhost:3000 para usar el correo automático.');
