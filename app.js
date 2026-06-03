@@ -105,8 +105,8 @@ let attendanceData = {};
 let editingStudentId = null;
 let addStudentReturnView = 'landing';
 // Configure hora diaria de envío (local cliente)
-const DAILY_SEND_HOUR = 20; // 20 = 8 PM
-const DAILY_SEND_MINUTE = 46; // :46
+const DAILY_SEND_HOUR = 21; // 21 = 9 PM
+const DAILY_SEND_MINUTE = 17; // :17
 let _sendingInProgress = false;
 
 const getSubjectsByYear = (year) => SUBJECTS_BY_YEAR[Number(year)] || [];
@@ -478,7 +478,7 @@ ${rows.join('\n')}
 Asistió en: ${attendedSubjects.length ? attendedSubjects.join(', ') : 'ninguna'}
 No asistió en: ${absentSubjects.length ? absentSubjects.join(', ') : 'ninguna'}
 
-Este correo se envía automáticamente a las 8:46 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 9:17 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;

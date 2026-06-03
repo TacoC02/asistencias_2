@@ -42,14 +42,17 @@ const saveAttendanceData = (data) => {
   }
 };
 
+// Configurar hora de envío diaria en el servidor (por defecto 21:17)
+const DAILY_SEND_HOUR = Number(process.env.DAILY_SEND_HOUR || 21);
+const DAILY_SEND_MINUTE = Number(process.env.DAILY_SEND_MINUTE || 17);
 const getNextNoonDelay = () => {
   const now = new Date();
-  const nextNoon = new Date(now);
-  nextNoon.setHours(12, 0, 0, 0);
-  if (now >= nextNoon) {
-    nextNoon.setDate(nextNoon.getDate() + 1);
+  const nextSend = new Date(now);
+  nextSend.setHours(DAILY_SEND_HOUR, DAILY_SEND_MINUTE, 0, 0);
+  if (now >= nextSend) {
+    nextSend.setDate(nextSend.getDate() + 1);
   }
-  return nextNoon - now;
+  return nextSend - now;
 };
 
 const buildStudentAttendanceMessage = (student) => {
@@ -67,7 +70,7 @@ Aquí está el resumen diario de asistencia del/la estudiante ${student.name} pa
 Materias:
 ${rows.join('\n')}
 
-Este correo se envía automáticamente a las 12:00 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las ${DAILY_SEND_HOUR}:${String(DAILY_SEND_MINUTE).padStart(2,'0')} con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -129,7 +132,8 @@ const sendDailyAttendanceEmails = async () => {
 
 const scheduleDailyAttendanceEmails = () => {
   const delay = getNextNoonDelay();
-  console.log(`Próximo envío diario programado en ${Math.round(delay / 1000 / 60)} minutos.`);
+  const minutes = Math.round(delay / 1000 / 60);
+  console.log(`Próximo envío diario programado en ${minutes} minutos (a las ${DAILY_SEND_HOUR}:${String(DAILY_SEND_MINUTE).padStart(2,'0')}).`);
   setTimeout(async () => {
     await sendDailyAttendanceEmails();
     scheduleDailyAttendanceEmails();
@@ -164,6 +168,73 @@ app.post('/api/attendance', (req, res) => {
   saveAttendanceData(data);
 
   res.json(student);
+});
+
+app.get('/api/students', (req, res) => {
+  const data = loadAttendanceData();
+  const year = req.query.year;
+  const students = Object.values(data.students).filter((student) => !year || String(student.year) === String(year));
+  res.json(students);
+});
+
+app.post('/api/students', (req, res) => {
+  const { id, name, email, phone, year } = req.body || {};
+  if (!name || !email || !year) {
+    return res.status(400).json({ error: 'Falta nombre, correo o año.' });
+  }
+
+  const data = loadAttendanceData();
+  const studentId = id || `student-${Date.now()}`;
+  const student = data.students[studentId] || { id: studentId, attendance: {} };
+  student.id = studentId;
+  student.name = name;
+  student.email = email;
+  student.phone = phone || student.phone || '';
+  student.year = Number(year);
+  student.status = student.status || '';
+  student.attendance = student.attendance || {};
+  data.students[studentId] = student;
+  saveAttendanceData(data);
+
+  res.json(student);
+});
+
+app.patch('/api/students', (req, res) => {
+  const { id, name, email, phone, year } = req.body || {};
+  if (!id) {
+    return res.status(400).json({ error: 'Falta id del estudiante.' });
+  }
+
+  const data = loadAttendanceData();
+  const student = data.students[id];
+  if (!student) {
+    return res.status(404).json({ error: 'Estudiante no encontrado.' });
+  }
+
+  if (name) student.name = name;
+  if (email) student.email = email;
+  if (phone) student.phone = phone;
+  if (year) student.year = Number(year);
+  data.students[id] = student;
+  saveAttendanceData(data);
+
+  res.json(student);
+});
+
+app.delete('/api/students', (req, res) => {
+  const id = req.query.id || req.body?.id;
+  if (!id) {
+    return res.status(400).json({ error: 'Falta id del estudiante.' });
+  }
+
+  const data = loadAttendanceData();
+  if (!data.students[id]) {
+    return res.status(404).json({ error: 'Estudiante no encontrado.' });
+  }
+
+  delete data.students[id];
+  saveAttendanceData(data);
+  res.json({ success: true, id });
 });
 
 app.get('/api/attendance', (req, res) => {

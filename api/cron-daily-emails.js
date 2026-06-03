@@ -50,7 +50,7 @@ Aquí está el resumen diario de asistencia del/la estudiante ${student.name} pa
 Materias:
 ${lines.join('\n')}
 
-Este correo se envía automáticamente a las 8:46 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 9:17 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
