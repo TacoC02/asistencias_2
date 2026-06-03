@@ -50,7 +50,7 @@ Aquí está el resumen diario de asistencia del/la estudiante ${student.name} pa
 Materias:
 ${lines.join('\n')}
 
-Este correo se envía automáticamente a las 12:00 PM con la asistencia registrada hasta ese momento.
+Este correo se envía automáticamente a las 3:40 PM con la asistencia registrada hasta ese momento.
 
 Saludos cordiales,
 Sistema de Gestión Escolar`;
@@ -94,7 +94,16 @@ module.exports = async (req, res) => {
     }
 
     const studentIds = [...new Set(attendances.map((item) => item.student_id))];
-    const studentsResponse = await supabaseFetch(`/students?id=in.(${studentIds.join(',')})`);
+    // Formatea los IDs para la consulta REST de Supabase.
+    // Si los IDs no son numéricos, deben ir entre comillas simples: in.('id1','id2')
+    const formattedIds = studentIds
+      .map((id) => {
+        if (id === null || id === undefined) return '';
+        return isNaN(Number(id)) ? `'${String(id).replace(/'/g, "''")}'` : String(id);
+      })
+      .filter(Boolean)
+      .join(',');
+    const studentsResponse = await supabaseFetch(`/students?id=in.(${formattedIds})`);
     const students = await studentsResponse.json();
     const studentMap = parseStudentRecords(students);
 
